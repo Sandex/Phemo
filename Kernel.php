@@ -139,7 +139,7 @@ class Kernel
      *
      * @return DI
      */
-    private function getDI()
+    protected function getDI()
     {
         if (!$this->di) {
             $this->di = new FactoryDefault;
@@ -236,6 +236,8 @@ class Kernel
 
             return strtolower($i13n);
         });
+
+        static::confingureServices();
 
         return $this;
     }
