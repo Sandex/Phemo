@@ -3,15 +3,18 @@
 namespace Phemo;
 
 use Phalcon\Config;
+use Phalcon\Db\Exception as ExceptionDb;
 use Phalcon\DI;
 use Phalcon\DI\FactoryDefault;
 use Phalcon\DiInterface;
 use Phalcon\Exception;
+use Phalcon\Http\Request;
 use Phalcon\Http\Response;
 use Phalcon\Loader;
 use Phalcon\Mvc\Application;
+use Phalcon\Mvc\DispatcherInterface;
 use Phalcon\Mvc\Model\Transaction\Manager;
-use Phalcon\Mvc\Router\Route;
+use Phalcon\Mvc\Router;
 use Phalcon\Mvc\View;
 use Phalcon\Session\Adapter\Files;
 
@@ -74,9 +77,11 @@ class Kernel
 
             $this->confingureAutolader();
 
-            $this->confingureServices();
-
             $this->initializeBundles();
+
+            $this->configureRouter();
+
+            $this->confingureServices();
         } catch (Exception $e) {
             $this->handleException($e);
         }
@@ -149,6 +154,47 @@ class Kernel
     }
 
     /**
+     * Configure router
+     */
+    private function configureRouter()
+    {
+        $di = $this->getDI();
+
+        $di->set('router', function() {
+
+            $router = new Router($defaultRoutes = false);
+
+            /**
+             * Example:
+             * phalcon.local/phemo/demo/product/index/?page=2
+             * phalcon.local/fr/phemo/demo/product/index/?page=2
+             * phalcon.local/fr-ca/phemo/demo/product/index/?page=2
+             *
+             * language     = fr
+             * locale       = ca
+             * module       = phemo/demo
+             * controller   = product
+             * action       = index
+             * params       = page=2
+             */
+            /*
+              $prefixModules = array_keys($this->bundlesModules);
+              foreach ($prefixModules as $prefix) {
+              $router->add('/(?:([a-z]{2})(?:-([a-z]{2}))?/)?' . $prefix . '(?:/:controller(?:/:action(?:/:params)?)?)?', [
+              'language'   => 1,
+              'locale'     => 2,
+              'module'     => $prefix,
+              'controller' => 3,
+              'action'     => 4,
+              'params'     => 5,
+              ]);
+              }/* */
+
+            return $router;
+        });
+    }
+
+    /**
      * Push components into DI
      *
      * @return DI
@@ -189,7 +235,7 @@ class Kernel
             unset($this->config->database->adapter);
 
             if (!class_exists($pdoAdapter)) {
-                throw new \Phalcon\Db\Exception('DB adapter "' . $pdoAdapter . '" not exists! See param database->adapter in config file.');
+                throw new ExceptionDb('DB adapter "' . $pdoAdapter . '" not exists! See param database->adapter in config file.');
             }
 
             try {
@@ -260,7 +306,7 @@ class Kernel
 
         $namespaces = [];
 
-        // Add phemo vendor autoload
+        // Add phemo vendor to autoload
         foreach (['Mvc'] as $dir) {
             $namespaces['Phemo\\' . $dir] = realpath(__DIR__ . DIRECTORY_SEPARATOR . $dir);
         }
@@ -299,36 +345,10 @@ class Kernel
      */
     private function initializeBundle($bundleNamespace, $bundlePath)
     {
-        /* @var $router Route */
-        $router = $this->getDI()->getShared('router');
-
         $bundleNamespaceParsts = preg_split("/\\\/", $bundleNamespace);
         $bundleVendorName = array_shift($bundleNamespaceParsts);
         $bundleName = array_shift($bundleNamespaceParsts);
-        $prefix = strtolower($bundleVendorName . '/' . str_replace('Bundle', '', $bundleName));
-
-        /**
-         * Example:
-         * phalcon.local/phemo/demo/product/index/?page=2
-         * phalcon.local/fr/phemo/demo/product/index/?page=2
-         * phalcon.local/fr-ca/phemo/demo/product/index/?page=2
-         *
-         * language     = fr
-         * locale       = ca
-         * module       = phemo/demo
-         * controller   = product
-         * action       = index
-         * params       = page=2
-         */
-        $router->add('/(([a-z]{2})(-([a-z]{2}))?/)?' . $prefix . '(/:controller(/:action(/:params)?)?)?', [
-            'module'     => $prefix,
-            'namespace'  => $bundleNamespace . '\\Controller',
-            'language'   => 2,
-            'locale'     => 4,
-            'controller' => 6,
-            'action'     => 8,
-            'params'     => 10,
-        ]);
+        $prefix = strtolower($bundleVendorName . '' . str_replace('Bundle', '', $bundleName));
 
         $this->bundlesModules[$prefix] = [
             'className' => $bundleNamespace . '\BundleModule',
